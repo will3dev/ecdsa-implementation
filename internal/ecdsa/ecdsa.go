@@ -30,10 +30,10 @@ type KeyObject struct {
 }
 
 type EcdsaSignature struct {
-	publicKey Point
-	h *big.Int // The hash of the message
-	r *big.Int // point R.x of the random value 
-	s *big.Int // the resulting signature
+	PublicKey Point
+	H *big.Int // The hash of the message
+	R *big.Int // point R.x of the random value
+	S *big.Int // the resulting signature
 }
 
 var (
@@ -46,7 +46,7 @@ var (
 )
 
 
-func generateRandomScalar() (*big.Int, error) {
+func GenerateRandomScalar() (*big.Int, error) {
 	scalar, err := rand.Int(rand.Reader, N)
 	if err != nil {
 		return nil, err
@@ -63,14 +63,14 @@ func hashMessage(message []byte) *big.Int {
 	return new(big.Int).SetBytes(hash[:])
 }
 
-func generatePublicKey(privKey *big.Int) Point {
+func GeneratePublicKey(privKey *big.Int) Point {
 	x, y := curve.ScalarBaseMult(privKey.Bytes())
 	return Point{X: x, Y: y}
 }
 
 
 
-func signMessage(message []byte, pubKey Point, privKey *big.Int, k *big.Int) EcdsaSignature {
+func SignMessage(message []byte, pubKey Point, privKey *big.Int, k *big.Int) EcdsaSignature {
 	// hash message
 	h := hashMessage(message)
 
@@ -94,16 +94,31 @@ func signMessage(message []byte, pubKey Point, privKey *big.Int, k *big.Int) Ecd
 	
 	// generate and return the signature object
 	Signature := EcdsaSignature {
-		publicKey: pubKey,
-		h: h,
-		r: r,
-		s: s
+		PublicKey: pubKey,
+		H: h,
+		R: r,
+		S: s,
 	}
 
 	return Signature 
 }
 
 
-func verifySignature() {
-	
+func VerifySignature(sig EcdsaSignature) bool {
+	// compute R` = s^-1 (hG + rP)
+	rpX, rpY := curve.ScalarMult(sig.PublicKey.X, sig.PublicKey.Y, sig.R.Bytes())
+	rP := Point{X: rpX, Y: rpY}
+
+	hgX, hgY := curve.ScalarBaseMult(sig.H.Bytes())
+	hG := Point{X: hgX, Y: hgY}
+
+	sumX, sumY := curve.Add(hG.X, hG.Y, rP.X, rP.Y)
+
+	sNew := new(big.Int).ModInverse(sig.S, N)
+
+	sX, sY := curve.ScalarMult(sumX, sumY, sNew.Bytes())
+	R := Point{X: sX, Y: sY}
+
+	// check that R`.x == r from the signature
+	return R.X.Cmp(sig.R) == 0
 }
